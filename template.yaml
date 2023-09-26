@@ -1,0 +1,104 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: SAM template for gpt reports generator
+
+Globals:
+  Function:
+    Timeout: 50
+    MemorySize: 1024
+
+Resources:
+
+  ServerlessHttpApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors:
+        AllowMethods: "'OPTIONS,GET,PUT,POST,DELETE'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+        
+  ProductAppFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      # ReservedConcurrentExecutions: 10 //Failed to update
+      CodeUri: service/
+      Handler: index.lambdaHandler
+      Runtime: nodejs18.x
+      Architectures:
+        - x86_64
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref ReportFilesBucket
+        - S3WritePolicy:
+            BucketName: !Ref ReportFilesBucket
+
+      Events:
+        CreateProductEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ServerlessHttpApi
+            # Auth:
+            #   ApiKeyRequired: true    ## use this if you are enabling api key for security
+            Path: /reports
+            Method: POST
+
+    Metadata: # Manage esbuild properties
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        # Sourcemap: true # Enabling source maps will create the required NODE_OPTIONS environment variables on your lambda function during sam build
+        EntryPoints:
+          - index.ts
+
+  ReportFilesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: sam-gpt-reports
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+            AllowedOrigins:
+              - '*'
+
+  ReportFilesBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ReportFilesBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: s3:GetObject
+            Resource: !Join
+              - ""
+              - - "arn:aws:s3:::"
+                - !Ref ReportFilesBucket
+                - "/*"
+            Principal: "*"
+
+Outputs:
+  ServerlessHttpApi:
+    Description: API Gateway endpoint URL for Prod stage
+    Value:
+      Fn::Sub: https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+
+  GenerateReportApi:
+    Description: "Create API endpoint URL for Prod stage"
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/reports"
+
