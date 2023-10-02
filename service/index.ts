@@ -14,7 +14,6 @@ import { createResponseWithCorsHeaders, generateReport } from './controller';
 const s3 = new S3Client({});
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    console.log('lambda called');
     let response: Promise<APIGatewayProxyResult>;
     const notFound = {
         statusCode: 400,
@@ -25,9 +24,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
     //generate reports
     if (event.httpMethod === 'POST' && event.path === '/reports') {
-        console.log('inside event');
+        console.info('Generating reports');
         response = generateReport(event, s3);
         return response;
-    }
+    } else {
+
     return createResponseWithCorsHeaders(notFoundeResponse);
+    }
 };
